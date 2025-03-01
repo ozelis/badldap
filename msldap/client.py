@@ -1157,7 +1157,7 @@ class MSLDAPClient:
 			elif 'group' in temp:
 				yield MSADGroup.from_ldap(entry), None
 
-	async def modify(self, dn:str, changes:Dict[str, object], controls:Dict[str, object] = None):
+	async def modify(self, dn:str, changes:Dict[str, object], controls:Dict[str, object] = None, encode=True):
 		"""
 		Performs the modify operation.
 		
@@ -1167,6 +1167,9 @@ class MSLDAPClient:
 		:type changes: dict
 		:param controls: additional controls to be passed in the query
 		:type controls: dict
+		:param encode: encode the changes provided before sending them to the server
+    	:type encode: bool
+		
 		:return: A tuple of (True, None) on success or (False, Exception) on error. 
 		:rtype: (:class:`bool`, :class:`Exception`)
 		"""
@@ -1175,7 +1178,7 @@ class MSLDAPClient:
 		controls_conv = []
 		for control in controls:	
 			controls_conv.append(Control(control))
-		return await self._con.modify(dn, changes, controls=controls_conv)
+		return await self._con.modify(dn, changes, controls=controls_conv, encode=encode)
 
 
 	async def add(self, dn:str, attributes:Dict[str, object]):
