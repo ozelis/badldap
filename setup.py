@@ -13,7 +13,7 @@ else:
 
 setup(
 	# Application name:
-	name="msldap",
+	name="msldap-bAD",
 
 	# Version number (initial):
 	version=verstr,
