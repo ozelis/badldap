@@ -112,6 +112,8 @@ def single_guid(x, encode = False):
 def single_sd(x, encode = False):
 	if encode is False:
 		return SECURITY_DESCRIPTOR.from_bytes(x[0])
+	if isinstance(x, str):
+		x = SECURITY_DESCRIPTOR.from_sddl(x)
 	return [x.to_bytes()]
 
 def single_date(x, encode = False, encoding = 'utf-8'):
@@ -480,7 +482,12 @@ def encode_changes(x, encode=True):
 			if isinstance(value, list) and "single" == splitted_name[0]:
 				if len(value) > 1:
 					raise TypeError(f"{k} takes only one value but multiple values have been given.")
-				value = value[0]
+				# No value provided is for deletion so it shouldn't try to encode anything
+				elif len(value) == 0:
+					value = b''
+					encode = False
+				else:
+					value = value[0]
 			if not encode and splitted_name[1] != ["bytes"]:
 				if splitted_name[0] == "single":
 					encoder = single_bytes
