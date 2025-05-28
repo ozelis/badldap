@@ -1,7 +1,8 @@
 
-__version__ = "0.5.21"
+__version__ = "0.5.22"
 __banner__ = \
 """
 # msldap %s 
-# Author: Tamas Jos @skelsec (info@skelsecprojects.com)
+# Original Author: Tamas Jos (@skelsec)
+# Current Maintainer: Baptiste Crépin (baptiste@cravaterouge.com)
 """ % __version__

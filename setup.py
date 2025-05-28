@@ -21,7 +21,11 @@ setup(
 	# Application author details:
 	author="Tamas Jos",
 	author_email="info@skelsecprojects.com",
-
+    
+	# Maintainer details:
+	maintainer="Baptiste Crépin",
+	maintainer_email="baptiste@cravaterouge.com",
+    
 	# Packages
 	packages=find_packages(exclude=["tests*"]),
 
@@ -30,7 +34,7 @@ setup(
 
 
 	# Details
-	url="https://github.com/skelsec/msldap",
+	url="https://github.com/CravateRouge/msldap-bAD",
 
 	zip_safe = False,
 	#
