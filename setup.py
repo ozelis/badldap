@@ -52,7 +52,7 @@ setup(
 	],
 	install_requires=[
 		'unicrypto>=0.0.10',
-		'asyauth-bAD>=0.0.25',
+		'asyauth-bAD>=0.0.27',
 		'asysocks>=0.2.11',
 		'asn1crypto>=1.3.0',
 		'winacl>=0.1.8',
