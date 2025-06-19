@@ -831,7 +831,7 @@ class MSLDAPClientConnection:
 						if 'resultCode' in res['protocolOp']:
 							if res['protocolOp']['resultCode'] != 'success':
 								raise LDAPSearchException(res['protocolOp']['resultCode'], res['protocolOp']['diagnosticMessage'])
-							for control in res['controls']:
+							for control in res['controls'] or []:
 								if control['controlType'] == b'1.2.840.113556.1.4.319':
 									try:
 										cookie = SearchControlValue.load(control['controlValue']).native['cookie']

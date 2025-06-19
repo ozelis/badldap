@@ -466,41 +466,44 @@ def encode_changes(x, encode=True):
 	logger.debug('Encode changes: %s' % x)
 	res = []
 	for k in x:
-		lookup_table = None
-		if k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC:
-			lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC
-		elif k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES:
-			lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES
-		elif k in LDAP_WELL_KNOWN_ATTRS:
-			lookup_table = LDAP_WELL_KNOWN_ATTRS
-		else:
-			raise Exception('Unknown conversion type for key "%s"' % k)
-		
+		lookup_table = None		
 		for mod, value in x[k]:
-			encoder = lookup_table[k]
-			splitted_name = encoder.__name__.split("_")
-			if isinstance(value, list) and "single" == splitted_name[0]:
-				if len(value) > 1:
-					raise TypeError(f"{k} takes only one value but multiple values have been given.")
-				# No value provided is for deletion so it shouldn't try to encode anything
-				elif len(value) == 0:
-					value = b''
-					encode = False
-				else:
-					value = value[0]
-			if not encode and splitted_name[1] != ["bytes"]:
-				if splitted_name[0] == "single":
-					encoder = single_bytes
-				else:
-					encoder = multi_bytes
+			attributes = []
+			if value:
+				if not lookup_table:
+					if k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC:
+						lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC
+					elif k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES:
+						lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES
+					elif k in LDAP_WELL_KNOWN_ATTRS:
+						lookup_table = LDAP_WELL_KNOWN_ATTRS
+					else:
+						raise Exception('Unknown conversion type for key "%s"' % k)
+				encoder = lookup_table[k]
+				# If value is a list but the attribute expect a single element, assign the element to value
+				splitted_name = encoder.__name__.split("_")
+				if isinstance(value, list) and "single" == splitted_name[0]:
+					if len(value) > 1:
+						raise TypeError(f"{k} takes only one value but multiple values have been given.")
+					else:
+						value = value[0]
+				# If encoding is disabled then call the "bytes" encoder 
+				if not encode and splitted_name[1] != ["bytes"]:
+					if splitted_name[0] == "single":
+						encoder = single_bytes
+					else:
+						encoder = multi_bytes
+				attributes = encoder(value, True)
+			# RFC4511 4.6 Modify Operation
+			# If attributes is an empty list it will delete the entire attribute
 			res.append(Change({
 				'operation' : mod,
 				'modification' : PartialAttribute({
 					'type' : k.encode(),
-					'attributes' : encoder(value, True)
+					'attributes' : attributes
 				})
 			}))
-			#print(lookup_table[k](value, True))
+
 	return res
 
 LDAP_WELL_KNOWN_ATTRS = {
