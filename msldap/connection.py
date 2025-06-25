@@ -375,6 +375,8 @@ class MSLDAPClientConnection:
 				user = b''
 				if self.auth.username != None:
 					user = self.auth.username.encode()
+					if self.auth.domain != None:
+						user = self.auth.domain.encode() + b"\\" + user
 				if user == b'':
 					self.is_anon = True
 				
