@@ -1,18 +1,5 @@
-![Supported Python versions](https://img.shields.io/badge/python-3.6+-blue.svg) [![Documentation Status](https://readthedocs.org/projects/msldap/badge/?version=latest)](https://msldap.readthedocs.io/en/latest/?badge=latest) [![Twitter](https://img.shields.io/twitter/follow/skelsec?label=skelsec&style=social)](https://twitter.com/intent/follow?screen_name=skelsec)
-
-## :triangular_flag_on_post: Sponsors
-
-If you like this project, consider purchasing licenses of [OctoPwn](https://octopwn.com/), our full pentesting suite that runs in your browser!  
-For notifications on new builds/releases and other info, hop on to our [Discord](https://discord.gg/PM8utcNxMS)
-
-# msldap
+# msldap-bAD
 LDAP library for MS AD
-![Documentation Status](https://user-images.githubusercontent.com/19204702/81515211-3761e880-9333-11ea-837f-bcbe2a67ee48.gif )
-
-## :triangular_flag_on_post: Runs in the browser
-
-This project, alongside with many other pentester tools runs in the browser with the power of OctoPwn!  
-Check out the community version at [OctoPwn - Live](https://live.octopwn.com/)
 
 # Documentation
 [Awesome documentation here!](https://msldap.readthedocs.io/en/latest/)
@@ -34,22 +21,25 @@ Check out the community version at [OctoPwn - Live](https://live.octopwn.com/)
 Via GIT  
 `python3 setup.py install`  
 OR  
-`pip install msldap`
+`pip install msldap-bAD`
 
 # Prerequisites
- - `asn1crypto` module. Some LDAP queries incorporate ASN1 strucutres to be sent on top of the ASN1 transport XD
+ - `asn1crypto` module. Some LDAP queries incorporate ASN1 structures to be sent on top of the ASN1 transport XD
  - `asysocks` module. To support socks proxying.
  - `aiocmd` For the interactive client
  - `asciitree` For plotting nice trees in the interactive client
  
 # Usage
 Please note that this is a library, and was not intended to be used as a command line program.  
-Whit this noted, the projects packs a fully functional LDAP interactive client. When installing the `msldap` module with `setup.py install` a new binary will appear called `msldap` (shocking naming conventions)  
+Whit this noted, the projects packs a fully functional LDAP interactive client. When installing the `msldap-bAD` module with `setup.py install` a new binary will appear called `badldap`.
 
 # LDAP connection URL
 The major change was needed in version 0.2.0 to unify different connection options as one single string, without the need for additional command line switches.  
 The new connection string is composed in the following manner:  
 `<protocol>+<auth_method>://<domain>\<username>:<password>@<ip>:<port>/?<param>=<value>&<param>=<value>&...`  
+
+WARNING: URL special chars (@, :, /, ?, &, =) must be URL encoded!
+
 Detailed explanation with examples:  
 ```	
 <protocol>+<auth>://<username>:<password>@<ip_or_host>:<port>/<tree>/?<param>=<value>
@@ -83,7 +73,7 @@ Detailed explanation with examples:
 		OPTIONAL. Specifies the root tree of all queries
 		
 	<param> can be:
-		- timeout : connction timeout in seconds
+		- timeout : connection timeout in seconds
 		- proxytype: currently only socks5 proxy is supported
 		- proxyhost: Ip or hostname of the proxy server
 		- proxyport: port of the proxy server

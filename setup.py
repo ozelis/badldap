@@ -52,7 +52,7 @@ setup(
 	],
 	install_requires=[
 		'unicrypto>=0.0.10',
-		'asyauth-bAD>=0.0.28',
+		'asyauth-bAD>=0.0.29',
 		'asysocks>=0.2.11',
 		'asn1crypto>=1.3.0',
 		'winacl>=0.1.8',
@@ -63,8 +63,8 @@ setup(
 	],
 	entry_points={
 		'console_scripts': [
-			'msldapbad = msldap.examples.msldapclient:main',
-            'msldapbad-bloodhound = msldap.examples.msldapbloodhound:main',
+			'badldap = msldap.examples.msldapclient:main',
+            'badldap-bloodhound = msldap.examples.msldapbloodhound:main',
 		],
 	}
 )
