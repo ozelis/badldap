@@ -1,5 +1,5 @@
 
-__version__ = "0.5.26"
+__version__ = "0.5.27"
 __banner__ = \
 """
 # msldap-bAD %s 
