@@ -2,5 +2,5 @@ MSLDAPProxy -- proxy object
 ==================================================
 
 
-.. autoclass:: msldap.commons.proxy.MSLDAPProxy
+.. autoclass:: badldap.commons.proxy.MSLDAPProxy
 	:members: from_params

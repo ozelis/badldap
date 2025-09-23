@@ -118,7 +118,7 @@ Encryption
 | This is done by the `encrypt` parameter added to the `url`.
 | It is not enabled by default, as it can slow down the connection considerably. 
 
-.. warning:: Channel encryption MUST NOT be used together with LDAPS! Doing so will result in failed connection! (this limitation is in the server implementation, not in msldap)
+.. warning:: Channel encryption MUST NOT be used together with LDAPS! Doing so will result in failed connection! (this limitation is in the server implementation, not in badldap)
 
 .. code:: python
 

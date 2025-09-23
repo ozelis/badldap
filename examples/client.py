@@ -1,5 +1,5 @@
 import asyncio
-from msldap.commons.factory import LDAPConnectionFactory
+from badldap.commons.factory import LDAPConnectionFactory
 
 url = 'ldap+simple://TEST\\victim:Passw0rd!1@10.10.10.2'
 

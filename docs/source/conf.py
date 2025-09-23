@@ -15,11 +15,11 @@ import sys
 sys.path.insert(0, os.path.abspath('../..'))
 sys.setrecursionlimit(1500)
 
-from msldap._version import __version__
+from badldap._version import __version__
 
 # -- Project information -----------------------------------------------------
 
-project = 'msldap'
+project = 'badldap'
 copyright = '2020, Tamas Jos'
 author = 'Tamas Jos'
 

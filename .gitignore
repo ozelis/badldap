@@ -104,4 +104,4 @@ venv.bak/
 .mypy_cache/
 *.exe
 *.json
-!msldap/external/bloodhoundpy/*
+!badldap/external/bloodhoundpy/*

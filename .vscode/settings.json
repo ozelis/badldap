@@ -1,9 +1,0 @@
-{
-	"restructuredtext.confPath": "${workspaceFolder}/docs/source",
-	"cSpell.ignoreWords": [
-		"dont",
-		"preauth",
-		"req",
-		"rtype"
-	]
-}

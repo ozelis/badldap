@@ -1,10 +1,10 @@
-.. msldap documentation master file, created by
+.. badldap documentation master file, created by
    sphinx-quickstart on Sat May  9 03:33:11 2020.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
    , get_dn_for_objectsid, get_group_members
 
-Welcome to msldap's documentation!
+Welcome to badldap's documentation!
 ==================================
 
 Basic example

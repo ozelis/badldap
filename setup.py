@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 import re
 
-VERSIONFILE="msldap/_version.py"
+VERSIONFILE="badldap/_version.py"
 verstrline = open(VERSIONFILE, "rt").read()
 VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
 mo = re.search(VSRE, verstrline, re.M)
@@ -13,7 +13,7 @@ else:
 
 setup(
 	# Application name:
-	name="msldap-bAD",
+	name="badldap",
 
 	# Version number (initial):
 	version=verstr,
@@ -34,7 +34,7 @@ setup(
 
 
 	# Details
-	url="https://github.com/CravateRouge/msldap-bAD",
+	url="https://github.com/CravateRouge/badldap",
 
 	zip_safe = False,
 	#
@@ -52,7 +52,7 @@ setup(
 	],
 	install_requires=[
 		'unicrypto>=0.0.10',
-		'asyauth-bAD>=0.0.30',
+		'badauth>=0.1.0',
 		'asysocks>=0.2.11',
 		'asn1crypto>=1.3.0',
 		'winacl>=0.1.8',
@@ -63,8 +63,8 @@ setup(
 	],
 	entry_points={
 		'console_scripts': [
-			'badldap = msldap.examples.msldapclient:main',
-            'badldap-bloodhound = msldap.examples.msldapbloodhound:main',
+			'badldap = badldap.examples.msldapclient:main',
+            'badldap-bloodhound = badldap.examples.msldapbloodhound:main',
 		],
 	}
 )

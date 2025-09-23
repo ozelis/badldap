@@ -2,5 +2,5 @@ MSLDAPTarget -- connection target object
 ==================================================
 
 
-.. autoclass:: msldap.commons.target.MSLDAPTarget
+.. autoclass:: badldap.commons.target.MSLDAPTarget
 

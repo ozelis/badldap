@@ -1,4 +1,4 @@
-# msldap-bAD
+# badldap
 LDAP library for MS AD
 
 # Documentation
@@ -21,7 +21,7 @@ LDAP library for MS AD
 Via GIT  
 `python3 setup.py install`  
 OR  
-`pip install msldap-bAD`
+`pip install badldap`
 
 # Prerequisites
  - `asn1crypto` module. Some LDAP queries incorporate ASN1 structures to be sent on top of the ASN1 transport XD
@@ -31,7 +31,7 @@ OR
  
 # Usage
 Please note that this is a library, and was not intended to be used as a command line program.  
-Whit this noted, the projects packs a fully functional LDAP interactive client. When installing the `msldap-bAD` module with `setup.py install` a new binary will appear called `badldap`.
+Whit this noted, the projects packs a fully functional LDAP interactive client. When installing the `badldap` module with `setup.py install` a new binary will appear called `badldap`.
 
 # LDAP connection URL
 The major change was needed in version 0.2.0 to unify different connection options as one single string, without the need for additional command line switches.  

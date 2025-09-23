@@ -2,5 +2,5 @@ MSLDAPCredential -- credential object
 ==================================================
 
 
-.. autoclass:: msldap.commons.credential.MSLDAPCredential
+.. autoclass:: badldap.commons.credential.MSLDAPCredential
 
