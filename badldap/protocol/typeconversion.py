@@ -410,7 +410,15 @@ MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC = {
 	#'member' : multi_str,
 	'msDS-AllowedToActOnBehalfOfOtherIdentity' : single_bytes,
 	'nTSecurityDescriptor' : single_bytes,
-	#'msPKI-Certificate-Name-Flag' : single_int
+	#'msPKI-Certificate-Name-Flag' : single_int,
+	"msDS-DelegatedMSAState" : single_int,
+	"msDS-ManagedAccountPrecededByLink" : single_str,
+	"msDS-ManagedPasswordInterval" : single_int,
+	"msDS-SupportedEncryptionTypes" : single_int,
+	"msDS-GroupMSAMembership" : single_sd,
+	"msDS-KeyCredentialLink" : multi_str,
+	"dNSTombstoned" : single_bool,
+	"dnsRecord" : multi_bytes,
 }
 
 def encode_attributes(x):
@@ -2012,4 +2020,6 @@ LDAP_WELL_KNOWN_ATTRS = {
 	"x121Address" : multi_str,
 	"x500uniqueIdentifier" : multi_bytes,
 	"userCertificate" : multi_bytes,
+	"msDS-DelegatedMSAState" : single_int,
+	"msDS-ManagedAccountPrecededByLink" : multi_str,
 }

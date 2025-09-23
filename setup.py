@@ -52,7 +52,7 @@ setup(
 	],
 	install_requires=[
 		'unicrypto>=0.0.10',
-		'badauth>=0.1.0',
+		'badauth>=0.1.1',
 		'asysocks>=0.2.11',
 		'asn1crypto>=1.3.0',
 		'winacl>=0.1.8',
@@ -60,6 +60,7 @@ setup(
 		'tqdm',
 		'wcwidth',
 		'tabulate',
+		'unidns>=0.0.3',
 	],
 	entry_points={
 		'console_scripts': [

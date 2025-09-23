@@ -4,16 +4,19 @@
 #  Tamas Jos (@skelsec)
 #
 
+import re
 import asyncio
 import copy
 import random
 import string
+import datetime
 from typing import Dict, List, Tuple
 
 from badauth.common.credentials import UniCredential
 from winacl.dtyp.ace import ACCESS_ALLOWED_OBJECT_ACE, ADS_ACCESS_MASK
 from winacl.dtyp.guid import GUID
 from winacl.dtyp.security_descriptor import SECURITY_DESCRIPTOR
+from winacl.dtyp.ace import ACCESS_ALLOWED_OBJECT_ACE
 from winacl.dtyp.sid import SID
 
 from badldap import logger
@@ -28,7 +31,7 @@ from badldap.protocol.messages import Control
 from badldap.protocol.query import escape_filter_chars
 from badldap.wintypes.asn1.sdflagsrequest import (SDFlagsRequest,
                                                  SDFlagsRequestValue)
-from badldap.wintypes.dnsp.structures import DNS_RECORD, DnsPropertyFactory
+from badldap.wintypes.dnsp.structures import DNS_RECORD, DnsPropertyFactory, DNS_RECORD_TYPE
 
 
 class MSLDAPClient:
@@ -70,6 +73,8 @@ class MSLDAPClient:
 		self.disconnected_evt = None
 		self._sid_cache = {} #SID -> (domain, user)
 		self._domainsid_cache = {} # SID -> domain
+		self.domainname = None
+		self.domainsid = None
 		
 	
 	async def __aenter__(self):
@@ -138,7 +143,8 @@ class MSLDAPClient:
 					if err is not None:
 						raise err
 					self._domainsid_cache[self._ldapinfo.objectSid] = self._ldapinfo.name
-			
+					self.domainsid = self._ldapinfo.objectSid
+					await self.get_domain_name()
 				if self.keepalive is True:
 					self.__keepalive_task = asyncio.create_task(self.__keepalive(res['defaultNamingContext']))
 			return True, None
@@ -149,11 +155,21 @@ class MSLDAPClient:
 		return self._serverinfo
 	
 	async def get_domain_name(self):
+		if self.domainname is not None:
+			return self.domainname, None
 		self._ldapinfo, err = await self.get_ad_info()
 		if err is not None:
 			return None, err
-		domain = self._ldapinfo.name
-		return domain, err
+		#self.domainname = self._ldapinfo.name # This was the old version, now we use the DN
+		dc_pattern = re.compile(r"DC=([a-zA-Z0-9-]+)")
+		dc_components = dc_pattern.findall(self._ldapinfo.distinguishedName)
+		
+		if not dc_components:
+			raise ValueError(f"No DC components found in the DN: {self._ldapinfo.distinguishedName}")
+		
+		self.domainname = ".".join(dc_components)
+		
+		return self.domainname, err
 		
 
 	async def pagedsearch(self, query:str, attributes:List[str], controls:List[Tuple[str, str, str]] = None, tree:str = None, search_scope:int=2, raw: bool = False):
@@ -352,6 +368,22 @@ class MSLDAPClient:
 		async for entry, err in self.pagedsearch(ldap_filter, attributes):
 			yield entry, err
 	
+	async def get_laps_for_machine(self, machine_sid:str):
+		"""
+		Fetches all LAPS passwords for a machine. This functionality is only available to specific high-privileged users.
+
+		:param machine_sid: The SID of the machine.
+		:type machine_sid: str
+
+		:return: Async generator which yields (`dict`, None) tuple on success or (None, `Exception`) on error
+		:rtype: Iterator[(:class:`dict`, :class:`Exception`)]
+		"""
+
+		ldap_filter = r'(objectSid=%s)' % machine_sid
+		attributes = ['cn','ms-mcs-AdmPwd']
+		async for entry, err in self.pagedsearch(ldap_filter, attributes):
+			yield entry, err
+	
 	async def get_all_laps_windows(self):
 		"""
 		Fetches all LAPS passwords for all machines. This functionality is only available to specific high-privileged users.
@@ -386,7 +418,7 @@ class MSLDAPClient:
 		async for entry, err in self.pagedsearch(ldap_filter, attributes):
 			yield entry, err
 
-	async def get_schemaentry(self, dn:str):
+	async def get_schemaentry(self, dn:str, attrs:List[str] = MSADSCHEMAENTRY_ATTRS):
 		"""
 		Fetches one Schema entriy identified by dn
 
@@ -398,7 +430,7 @@ class MSLDAPClient:
 		async for entry, err in self._con.pagedsearch(
 			dn, 
 			r'(distinguishedName=%s)' % escape_filter_chars(dn),
-			attributes = [x.encode() for x in MSADSCHEMAENTRY_ATTRS], 
+			attributes = [x.encode() for x in attrs], 
 			size_limit = self.ldap_query_page_size, 
 			search_scope=BASE, 
 			controls = None, 
@@ -407,8 +439,33 @@ class MSLDAPClient:
 					raise err
 		
 				return MSADSchemaEntry.from_ldap(entry), None
-		else:
-			return None, None
+		return None, None
+		logger.debug('Finished polling for entries!')
+	
+	async def get_schemaentry_by_name(self, name:str, attrs:List[str] = MSADSCHEMAENTRY_ATTRS):
+		"""
+		Fetches one Schema entriy identified by dn
+
+		:return: (`MSADSchemaEntry`, None) tuple on success or (None, `Exception`) on error
+		:rtype: (:class:`MSADSchemaEntry`, :class:`Exception`)
+		"""
+		logger.debug('Polling Schema entry for %s'% name)
+
+		dn = 'CN=%s,%s' % (name, self._serverinfo['schemaNamingContext'])
+		
+		async for entry, err in self._con.pagedsearch(
+			dn, 
+			r'(distinguishedName=%s)' % escape_filter_chars(dn),
+			attributes = [x.encode() for x in attrs], 
+			size_limit = self.ldap_query_page_size, 
+			search_scope=BASE, 
+			controls = None, 
+			):
+				if err is not None:
+					raise err
+		
+				return MSADSchemaEntry.from_ldap(entry), None
+		return None, None
 		logger.debug('Finished polling for entries!')
 	
 	async def get_all_schemaentry(self, attrs:List[str] = MSADSCHEMAENTRY_ATTRS):
@@ -722,6 +779,24 @@ class MSLDAPClient:
 			if err is not None:
 				return None, err
 			return MSADUser.from_ldap(entry), None
+		
+		return None, Exception('Search returned no results!')
+	
+	async def get_user_by_sid(self, sid:str):
+		"""
+		Fetches the DN for an object specified by `sid`
+
+		:param sid: The user's SID
+		:type sid: str
+		"""
+
+		ldap_filter = r'(objectSid=%s)' % str(sid)
+		async for entry, err in self.pagedsearch(ldap_filter, MSADUser_ATTRS):
+			if err is not None:
+				return None, err
+			return MSADUser.from_ldap(entry), None
+		
+		return None, Exception('Search returned no results!')
 			
 	async def get_group_members(self, dn:str, recursive:bool = False):
 		"""
@@ -817,6 +892,13 @@ class MSLDAPClient:
 		:rtype: Iterator[(:class:`str`, :class:`Exception`)]
 
 		"""
+		sid, err = await self.dn2sid(dn)
+		if err is not None:
+			yield None, err
+			return
+		
+		if sid is not None:
+			yield str(sid), None
 		ldap_filter = r'(distinguishedName=%s)' % escape_filter_chars(dn)
 		attributes=[b'tokenGroups']
 
@@ -966,6 +1048,30 @@ class MSLDAPClient:
 		except Exception as e:
 			return False, e
 
+	async def create_broken_dmsa_user(self, user_dn:str, computer_sid:str):
+		"""
+		This will create a dmsa service user that can be used for neferious reasons, but DO NOT USE THIS FOR ANYTHING ELSE!
+
+		"""
+		try:
+			sn = user_dn.split(',')[0][3:]
+			attributes = {
+				'objectClass':  ['msDS-DelegatedManagedServiceAccount','organizationalPerson', 'person', 'top', 'user', 'computer'], 
+				'sn': sn, 
+				'sAMAccountName': sn,
+				'displayName': sn,
+				'msDS-DelegatedMSAState' : 0,
+				'msDS-ManagedPasswordInterval': 30,
+				'msDS-SupportedEncryptionTypes': 28,
+				'userAccountControl': 4096,
+				'msDS-GroupMSAMembership': SECURITY_DESCRIPTOR.from_sddl('O:S-1-5-32-544D:(A;;0xf01ff;;;%s)' % computer_sid.upper())
+			}
+			_, err = await self._con.add(user_dn, attributes)
+			if err is not None:
+				return False, err
+			return True, None
+		except Exception as e:
+			return False, e
 
 	async def unlock_user(self, user_dn:str):
 		"""
@@ -1337,12 +1443,18 @@ class MSLDAPClient:
 			new_sd = copy.deepcopy(target_sd)
 			new_sd.Owner = new_owner_sid
 
-			changes = {
-				target_attribute : [('replace', new_sd.to_bytes())]
-			}
-			_, err = await self.modify(target_dn, changes)
-			if err is not None:
-				raise err
+			if target_attribute == 'nTSecurityDescriptor':
+				_, err = await self.set_objectacl_by_dn(target_dn, new_sd.to_bytes(), flags = SDFlagsRequest.OWNER_SECURITY_INFORMATION)
+				if err is not None:
+					raise err
+
+			else:
+				changes = {
+					target_attribute : [('replace', new_sd.to_bytes())]
+				}
+				_, err = await self.modify(target_dn, changes)
+				if err is not None:
+					raise err
 
 			return True, None
 		except Exception as e:
@@ -1454,6 +1566,7 @@ class MSLDAPClient:
 		
 	async def add_computer(self, computername:str = None, password:str = None):
 		try:
+			
 			if computername is None:
 				computername = 'COMP%s$' % ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))
 			if computername.endswith('$') is False:
@@ -1466,26 +1579,19 @@ class MSLDAPClient:
 			domain = self._ldapinfo.distinguishedName.replace('DC','').replace('=','').replace(',','.')
 			attributes = {
 				'objectClass':  ['top', 'person', 'organizationalPerson', 'user', 'computer'], 
-				#'cn': computername[:-1], 
 				'sAMAccountName': computername,
-				'name': computername[:-1],
-				'servicePrincipalName' : "HOST/{}.{}".format(computername[:-1], domain),
+				'userAccountControl': 4096,
+				'dnsHostName': '%s.%s' % (computername[:-1], domain),
+				'servicePrincipalName' : [
+					"HOST/{}.{}".format(computername[:-1], domain),
+					"HOST/{}".format(computername[:-1]),
+					'RestrictedKrbHost/%s' % computername[:-1],
+					'RestrictedKrbHost/%s.%s' % (computername[:-1], domain),
+				],
+				'unicodePwd': '"{}"'.format(password)
 			}
 			dn = 'CN=%s,CN=Computers,%s' % (computername[:-1], self._ldapinfo.distinguishedName)
 			_, err = await self.add(dn, attributes)
-			if err is not None:
-				raise err
-			
-			# enabling computer account
-			changes = {
-				'userAccountControl': [('replace', 4096)]
-			}
-			_, err = await self._con.modify(dn, changes)
-			if err is not None:
-				raise err
-			
-			# Change password
-			_, err = await self.change_password(dn, password)
 			if err is not None:
 				raise err
 			
@@ -1655,6 +1761,7 @@ class MSLDAPClient:
 				if err is not None:
 					raise err
 				return entry['attributes']['distinguishedName'], None
+			return None, None
 		except Exception as e:
 			return None, e
 	
@@ -1749,7 +1856,7 @@ class MSLDAPClient:
 	
 						yield zone, props, None
 		except Exception as e:
-			yield None, e
+			yield None, None, e
 
 	async def dnsentries(self, zone = None, with_tombstones = False):
 		"""Lists all DNS entries in the forest"""
@@ -1794,8 +1901,397 @@ class MSLDAPClient:
 						raise Exception('Zone %s not found!' % zone)
 		except Exception as e:
 			yield None, None, None, e
-	
 
+	async def dns_gettree(self, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""
+		Returns the exact tree to use for the DNS query
+		"""
+
+		domainroot = self._serverinfo['defaultNamingContext']
+		forestroot = self._serverinfo['rootDomainNamingContext']
+		if forest is True:
+			dnsroot = 'CN=MicrosoftDNS,DC=ForestDnsZones,%s' % forestroot
+		else:
+			if legacy is True:
+				dnsroot = 'CN=MicrosoftDNS,CN=System,%s' % domainroot
+			else:
+				dnsroot = 'CN=MicrosoftDNS,DC=DomainDnsZones,%s' % domainroot
+
+		if zone is None:
+			self.domainname, err = await self.get_domain_name()
+			if err is not None:
+				raise err
+			zone = self.domainname
+
+		tree = 'DC=%s,%s' % (zone, dnsroot)
+		return tree, None
+
+	async def dns_queryall(self, zone:str=None, forest:bool=False, legacy:bool=False, throw:bool=True):
+		"""
+		Performs a DNS query on the AD for all dnsNode entries
+		"""
+		tree, err = await self.dns_gettree(zone, forest, legacy)
+		if err is not None:
+			raise err
+		ldap_query = r'(objectClass=dnsNode)'
+		async for entry, err in self.pagedsearch(ldap_query, ['dnsRecord','dNSTombstoned','name'], tree=tree):
+			if err is not None and throw is True:
+				raise err
+			yield entry, tree, None
+		yield None, tree, None
+	
+	async def dns_query(self, target, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""
+		Performs a DNS query on the AD for a specific dnsNode entry
+		"""
+
+		tree, err = await self.dns_gettree(zone, forest, legacy)
+		if err is not None:
+			raise err
+
+		
+		ldap_query = r'(&(objectClass=dnsNode)(name=%s))' % escape_filter_chars(target)
+		async for entry, err in self.pagedsearch(ldap_query, ['dnsRecord','dNSTombstoned','name'], tree=tree):
+			if err is not None:
+				raise err
+			return entry, tree, None
+		
+		return None, tree, None
+
+	async def dns_soa(self, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""
+		Fetches the SOA record for a given zone. If not zone is specified it will fetch the SOA for the current domain
+		"""
+		try:
+			async for entry, tree, err in self.dns_queryall(zone=zone, forest=forest, legacy=legacy):
+				if err is not None:
+					raise err
+
+				if entry is None:
+					continue
+
+				for recorddata in entry['attributes']['dnsRecord']:
+					record = DNS_RECORD.from_bytes(recorddata)
+					if record.Type == DNS_RECORD_TYPE.SOA:
+						return record.get_formatted(), None
+			return None, None
+		except Exception as e:
+			return None, e
+
+	async def dns_getserial(self, zone:str=None, forest:bool=False, legacy:bool=False):
+		return await self.dns_getserial_dns(zone, forest, legacy)
+		#"""
+		#Fetches the current serial number for a given zone. If not zone is specified it will fetch the serial number for the current domain
+		#"""
+		#try:
+		#	serial = 0
+		#	for forest in [True, False]:
+		#		for legacy in [True, False]:
+		#			async for entry, tree, err in self.dns_queryall(zone=zone, forest=forest, legacy=legacy, throw=False):
+		#				if err is not None:
+		#					raise err
+		#
+		#				if entry is None:
+		#					continue
+		#
+		#				for recorddata in entry['attributes']['dnsRecord']:
+		#					record = DNS_RECORD.from_bytes(recorddata)
+		#					print(record.Serial)
+		#					serial = max(serial, record.Serial)
+		#	print(serial)
+		#	return serial, None
+		#except Exception as e:
+		#	return None, e
+
+	async def dns_getserial_dns(self, zone:str=None, forest:bool=False, legacy:bool=False, dns_ip:str=None, dns_proto:str='TCP'):
+		try:
+			from asysocks.unicomm.common.target import UniTarget, UniProto
+			from unidns.client import DNSClient
+
+			if zone is None or zone == '':
+				self.domainname, err = await self.get_domain_name()
+				if err is not None:
+					raise err
+				zone = self.domainname
+
+			target_ip = None
+			target_proxy = None
+			if dns_ip is None or dns_ip == '':
+				if self._con.target is None:
+					raise Exception('Target is not set! Cant get serial via dns')
+				if self._con.target.dns is not None:
+					target_ip = self._con.target.dns
+				else:
+					# we're using the domain controller ip
+					target_ip = self._con.target.get_ip_or_hostname()
+				if self._con.target.proxies is not None:
+					target_proxy = copy.deepcopy(self._con.target.proxies)
+
+			if dns_proto is None or dns_proto == '':
+				dns_proto = 'TCP'
+			if dns_proto == 'TCP':
+				dns_proto = UniProto.CLIENT_TCP
+			elif dns_proto == 'UDP':
+				dns_proto = UniProto.CLIENT_UDP
+			else:
+				raise Exception('Invalid dns protocol! %s' % dns_proto)
+
+			target = UniTarget(target_ip, 53, dns_proto, proxies=target_proxy)
+			DNSClient = DNSClient(target)
+			soa, err = await DNSClient.query_SOA(zone)
+			if err is not None:
+				raise err
+
+			return soa.SERIAL, None
+		
+		except Exception as e:
+			return None, e
+
+	async def dns_add(self, target:str, ip:str, zone:str=None, forest:bool=False, legacy:bool=False, allow_multiple:bool=False):
+		"""Adds a DNS record for a given target. The effects of this operation are not immediate, it will take some time for the record to be synced to the domain name servers"""
+		# https://github.com/dirkjanm/krbrelayx/blob/master/dnstool.py#L305
+		# thx dirkjanm
+		try:
+			entry, tree, err = await self.dns_query(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			if entry is not None:
+				if allow_multiple is False:
+					# there is a record but we don't allow multiple, checking if there is the same type of record
+					for recorddata in entry['attributes']['dnsRecord']:
+						record = DNS_RECORD.from_bytes(recorddata)
+						if record.Type == DNS_RECORD_TYPE.A:
+							recdata = record.get_formatted()
+							if str(recdata.IpAddress) == target:
+								return None, Exception('Record already exists!')
+			
+				#current_soa, err = await self.dns_soa(zone, forest, legacy)
+				#if err is not None:
+				#	raise err
+				current_serial, err = await self.dns_getserial(zone, forest, legacy)
+				if err is not None:
+					raise err
+				newrecord = DNS_RECORD.create_A(ip, current_serial + 1)
+
+				changes = {
+					"dnsRecord": [('add', newrecord.to_bytes())]
+				}
+				return await self.modify(entry['objectName'], changes)
+			else:
+				current_serial, err = await self.dns_getserial(zone, forest, legacy)
+				if err is not None:
+					raise err
+				newrecord = DNS_RECORD.create_A(ip, current_serial + 1)
+				attributes = {
+					'objectClass': ['top', 'dnsNode'],
+					'objectCategory': 'CN=Dns-Node,%s' % self._serverinfo['schemaNamingContext'],
+					'dNSTombstoned': False,
+					'name': target,
+					'dnsRecord': newrecord.to_bytes()
+				}
+				dn = 'DC=%s,%s' % (target, tree)
+				_, err = await self.add(dn, attributes)
+				if err is not None:
+					raise err
+			
+			return True, None
+		except Exception as e:
+			return None, e
+
+	async def dns_modify(self, target:str, ip:str, zone:str=None, forest:bool=False, legacy:bool=False, allow_multiple:bool=False):
+		"""
+		Modifies a DNS record for a given target. The effects of this operation are not immediate, it will take some time for the record to be synced to the domain name servers
+		"""
+		try:
+			targetrecord = None
+			records = []
+			entry, tree, err = await self.dns_query(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			if entry is None:
+				return None, Exception('Record not found!')
+			
+			for recorddata in entry['attributes']['dnsRecord']:
+				record = DNS_RECORD.from_bytes(recorddata)
+				if record.Type == DNS_RECORD_TYPE.A:
+					targetrecord = record
+					continue
+				records.append(record)
+
+			if targetrecord is None:
+				return None, Exception('Record not found!')
+
+			serial, err = await self.dns_getserial(zone, forest, legacy)
+			if err is not None:
+				raise err
+			targetrecord = DNS_RECORD.create_A(ip, serial+1)
+			records.append(targetrecord.to_bytes())
+			changes = {
+				"dnsRecord": [('replace', records)]
+			}
+			return await self.modify(entry['objectName'], changes)
+
+		except Exception as e:
+			return None, e
+
+	async def dns_remove(self, target:str, ip:str, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""
+		Removes a DNS record for a given target. The effects of this operation are not immediate, it will take some time for the record to be synced to the domain name servers
+		"""
+		try:
+			entry, tree, err = await self.dns_query(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			if entry is None:
+				return None, Exception('Record not found!')
+			
+			if len(entry['attributes']['dnsRecord']) > 1:
+				targetrecord = None
+				records = []
+				for recorddata in entry['attributes']['dnsRecord']:
+					record = DNS_RECORD.from_bytes(recorddata)
+					if record.Type == DNS_RECORD_TYPE.A:
+						dnsentry = record.get_formatted()
+						if str(dnsentry.IpAddress) == ip:
+							targetrecord = record
+							break
+					
+				if targetrecord is None:
+					return None, Exception('Record with IP %s not found!' % ip)
+				changes = {
+					"dnsRecord": [('delete', targetrecord.to_bytes())]
+				}
+				return await self.modify(entry['objectName'], changes)
+			else:
+				serial, err = await self.dns_getserial(zone, forest, legacy)
+				if err is not None:
+					raise err
+				targetrecord = DNS_RECORD.create_zero_ts(datetime.datetime.today(), serial+1)
+				changes = {
+					"dnsRecord": [('replace', targetrecord.to_bytes())],
+					"dNSTombstoned": [('replace', True)]
+				}
+				return await self.modify(entry['objectName'], changes)
+			return True, None
+		except Exception as e:
+			return None, e
+
+	async def dns_delete(self, target:str, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""
+		Deletes a DNS record for a given target. This completly removes the record from the AD. The effects of this operation are not immediate, it will take some time for the record to be synced to the domain name servers
+		"""
+		try:
+			entry, tree, err = await self.dns_query(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			if entry is None:
+				return None, Exception('Record not found!')
+
+			return await self.delete(entry['objectName'])
+		except Exception as e:
+			return None, e
+
+	async def dns_restore(self, target:str, zone:str=None, forest:bool=False, legacy:bool=False):
+		"""
+		Restores a DNS record for a given target. The effects of this operation are not immediate, it will take some time for the record to be synced to the domain name servers
+		"""
+		try:
+			entry, tree, err = await self.dns_query(target, zone, forest, legacy)
+			if err is not None:
+				raise err
+			if entry is None:
+				return None, Exception('Record not found!')
+			
+			if len(entry['attributes']['dnsRecord']) > 1:
+				raise NotImplementedError('Cannot restore a record with multiple entries!. Dunno how')
+
+			serial, err = await self.dns_getserial(zone, forest, legacy)
+			if err is not None:
+				raise err
+			targetrecord = DNS_RECORD.create_zero_ts(datetime.datetime.today(), serial+1)
+			changes = {
+				"dnsRecord": [('replace', targetrecord.to_bytes())],
+				"dNSTombstoned": [('replace', False)]
+			}
+			return await self.modify(entry['objectName'], changes)
+			
+		except Exception as e:
+			return None, e
+
+	async def get_all_domain_controllers(self):
+		"""Lists all domain controllers in the forest"""
+		# domain controller is a machine account that has the flag MSLDAP_UAC.SERVER_TRUST_ACCOUNT
+		ldap_filter = r'(&(sAMAccountType=805306369)(userAccountControl:1.2.840.113556.1.4.803:=8192))'
+		async for entry, err in self.pagedsearch(ldap_filter, MSADMachine_ATTRS):
+			if err is not None:
+				yield None, err
+				continue
+			yield MSADMachine.from_ldap(entry), None
+	
+	async def get_all_dmsas(self):
+		"""Lists all DGMAs in the forest"""
+		async for entry, err in self.pagedsearch(r'(objectClass=msDS-DelegatedManagedServiceAccount)', MSADDMSAUser_ATTRS):
+			if err is not None:
+				raise err
+			yield MSADDMSAUser.from_ldap(entry), None
+	
+	async def get_obj_by_dn(self, dn:str, class_type:str):
+		"""
+		Fetches one object from the AD, based on the DN attribute 
+		
+		:param dn: The DN of the object.
+		:type dn: str
+		:param class_type: The class of the object.
+		:type class_type: str
+		:return: A tuple with the object and an `Exception` is there was any
+		:rtype: (:class:`MSADUser`, :class:`Exception`)
+		"""
+		if class_type == 'user':
+			oc = MSADUser
+		elif class_type == 'computer':
+			oc = MSADMachine
+		elif class_type == 'group':
+			oc = MSADGroup
+		elif class_type == 'container':
+			oc = MSADContainer
+		elif class_type == 'dmsa':
+			oc = MSADDMSAUser
+		else:
+			oc = None
+			
+		logger.debug('Polling AD for object %s'% dn)
+		ldap_filter = r'(distinguishedName=%s)' % dn
+		async for entry, err in self.pagedsearch(ldap_filter, MSADUser_ATTRS):
+			if err is not None:
+				return None, err
+			if oc is not None:
+				return oc.from_ldap(entry, self._ldapinfo), None
+			else:
+				return entry, None
+		else:
+			return None, None
+		logger.debug('Finished polling for entries!')
+	
+	async def get_keycredentiallink(self, dn:str):
+		"""
+		Fetches the keyCredentialLink attribute of an object based on the DN
+		"""
+		async for entry, err in self.pagedsearch(r'(distinguishedName=%s)' % dn, ["sAMAccountName", "objectSid", "msDS-KeyCredentialLink"]):
+			if err is not None:
+				raise err
+			if entry is None:
+				return None, None
+			return entry.get('attributes', {}).get('msDS-KeyCredentialLink', None), None
+		return None, None
+
+	async def set_keycredentiallink(self, dn:str, certificates:List[str]):
+		"""
+		Sets the keyCredentialLink attribute of an object based on the DN
+		"""
+		changes = {
+			"msDS-KeyCredentialLink": [('replace', certificates)]
+		}
+		return await self.modify(dn, changes)
 
 	#async def get_permissions_for_dn(self, dn):
 	#	"""
