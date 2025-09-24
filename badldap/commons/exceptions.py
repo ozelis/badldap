@@ -1,5 +1,7 @@
 
 from badldap.protocol.messages import resultCode
+from badldap.wintypes.winerror import WINERROR
+import re
 
 
 LDAPResultCodeLookup ={
@@ -50,9 +52,7 @@ class LDAPServerException(Exception):
 		self.resultcode = LDAPResultCodeLookup_inv[resultname]
 		self.resultname = resultname
 		self.diagnostic_message = diagnostic_message
-		self.message = message
-		if self.message is None:
-			self.message = 'LDAP server sent error! Result code: "%s" Reason: "%s"' % (self.resultcode, self.diagnostic_message)
+		self.message = format_ad_ldap_error(diagnostic_message, self.dn, self.resultname)
 		super().__init__(self.message)
 
 class LDAPSearchException(LDAPServerException):
@@ -82,3 +82,36 @@ class LDAPDeleteException(LDAPServerException):
 		self.dn = dn
 		message = 'LDAP Delete operation failed on DN %s! Result code: "%s" Reason: "%s"' % (self.dn, resultcode, diagnostic_message)
 		super().__init__(resultcode, diagnostic_message, message)
+
+
+def format_ad_ldap_error(diag_raw: bytes, dn: str, resultcode: str) -> str:
+	diag_msg = diag_raw.decode('utf-8', errors='ignore')
+
+	# Extract attribute if available
+	m_attr = re.search(r'Att\s+[0-9A-Fa-f]+\s+\(([^)]+)\)', diag_msg)
+	attribute = f' (Attr {m_attr.group(1)})' if m_attr else ''
+
+	# Find first matching WINERROR code
+	code_name = None
+	code_message = None
+	for hexstr in re.findall(r'\b[0-9A-Fa-f]{8}\b', diag_msg):
+		try:
+			code_int = int(hexstr, 16)
+		except ValueError:
+			continue
+		info = WINERROR.get(code_int)
+		if info:
+			code_name = info.get("code")
+			code_message = info.get("message")
+			break
+
+	reason = None
+	if code_name:
+		reason = f"({code_name}) {code_message}"
+	else:
+		m_reason = re.search(r'(problem[^,]+),\s+data 0([^\n]*)', diag_msg)
+		raw_reason = ''.join(m_reason.groups()) if m_reason else None
+		reason = raw_reason if raw_reason else diag_msg
+
+	return f"{resultcode} for {dn}{attribute} — Reason:{reason}"
+
