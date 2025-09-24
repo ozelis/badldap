@@ -112,9 +112,15 @@ def single_guid(x, encode = False):
 def single_sd(x, encode = False):
 	if encode is False:
 		return SECURITY_DESCRIPTOR.from_bytes(x[0])
-	if isinstance(x, str):
+	elif isinstance(x, SECURITY_DESCRIPTOR):
+		return [x.to_bytes()]
+	elif isinstance(x, str):
 		x = SECURITY_DESCRIPTOR.from_sddl(x)
-	return [x.to_bytes()]
+		return [x.to_bytes()]
+	elif isinstance(x, bytes):
+		return [x]
+	else:
+		raise ValueError('Invalid security descriptor type: %s' % type(x))
 
 def single_date(x, encode = False, encoding = 'utf-8'):
 	if encode is False:

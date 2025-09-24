@@ -52,7 +52,7 @@ class LDAPServerException(Exception):
 		self.resultcode = LDAPResultCodeLookup_inv[resultname]
 		self.resultname = resultname
 		self.diagnostic_message = diagnostic_message
-		self.message = format_ad_ldap_error(diagnostic_message, self.dn, self.resultname)
+		self.message = format_ad_ldap_error(diagnostic_message, self.resultname, getattr(self, "dn", None))
 		super().__init__(self.message)
 
 class LDAPSearchException(LDAPServerException):
@@ -84,12 +84,15 @@ class LDAPDeleteException(LDAPServerException):
 		super().__init__(resultcode, diagnostic_message, message)
 
 
-def format_ad_ldap_error(diag_raw: bytes, dn: str, resultcode: str) -> str:
+def format_ad_ldap_error(diag_raw: bytes, resultcode: str, dn: str = None) -> str:
 	diag_msg = diag_raw.decode('utf-8', errors='ignore')
 
-	# Extract attribute if available
-	m_attr = re.search(r'Att\s+[0-9A-Fa-f]+\s+\(([^)]+)\)', diag_msg)
-	attribute = f' (Attr {m_attr.group(1)})' if m_attr else ''
+	object_error = ''
+	if dn:
+		# 	# If LDAP error on DN there is probably an attribute specified to extract
+		m_attr = re.search(r'Att\s+[0-9A-Fa-f]+\s+\(([^)]+)\)', diag_msg)
+		attribute = f' {m_attr.group(1)}' if m_attr else ''
+		object_error = f"for {dn} (Attr{attribute}) "
 
 	# Find first matching WINERROR code
 	code_name = None
@@ -113,5 +116,5 @@ def format_ad_ldap_error(diag_raw: bytes, dn: str, resultcode: str) -> str:
 		raw_reason = ''.join(m_reason.groups()) if m_reason else None
 		reason = raw_reason if raw_reason else diag_msg
 
-	return f"{resultcode} for {dn}{attribute} — Reason:{reason}"
+	return f"{resultcode} {object_error}— Reason:{reason}"
 

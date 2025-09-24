@@ -61,6 +61,7 @@ setup(
 		'wcwidth',
 		'tabulate',
 		'unidns>=0.0.3',
+        'dnspython>=2.7.0'
 	],
 	entry_points={
 		'console_scripts': [

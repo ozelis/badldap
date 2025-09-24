@@ -4,6 +4,7 @@ import json
 import base64
 import datetime
 import asyncio
+import socket
 
 from tqdm import tqdm
 
@@ -15,6 +16,7 @@ from badldap.connection import MSLDAPClientConnection
 from badldap.client import MSLDAPClient
 from badldap.commons.adexplorer import Snapshot
 from badldap import logger
+from badldap.network import reacher
 
 async def dummy_print(msg):
 	print(msg)
@@ -1100,19 +1102,31 @@ class MSLDAPDump2Bloodhound:
 				seen[sid] = hostname
 				await self.print('[+] Found trust %s (%s)' % (hostname, sid))
 				await self.print('[+] Connecting to %s (follow_trusts)' % hostname)
+
 				if isinstance(self.ldap_url, str):
 					factory = LDAPConnectionFactory.from_url(self.ldap_url)
-					client = factory.get_client_newtarget(hostname)
 				elif isinstance(self.ldap_url, LDAPConnectionFactory):
-					client = self.ldap_url.get_client_newtarget(hostname)
+					factory = self.ldap_url
 				elif isinstance(self.ldap_url, MSLDAPClient):
 					factory = LDAPConnectionFactory.from_ldapconnection(self.ldap_url._con)
-					client = factory.get_client_newtarget(hostname)
 				elif isinstance(self.ldap_url, MSLDAPClientConnection):
 					factory = LDAPConnectionFactory.from_ldapconnection(self.ldap_url)
-					client = factory.get_client_newtarget(hostname)
 				else:
 					raise ValueError('Invalid ldap_url type: %s' % type(self.ldap_url))
+
+				ad_site = (self.ldapinfo["serverName"].rsplit(",CN=Sites")[0]).split(",CN=Servers,CN=")[1]			
+				dc_ip = (
+					self.connection.target.dc_ip
+					or self.connection.target.ip
+					or socket.gethostbyname(self.connection.target.hostname)
+				)
+				host_params = await reacher.findReachableDomainServer(hostname, ad_site, "ldap", self.connection.target.dns, dc_ip)
+
+				client = None
+				if host_params:
+					client = factory.get_client_newtarget(host_params['name'], host_params['ip'], host_params['port'], new_domain=hostname, old_target_ip=dc_ip)
+				else:
+					client = factory.get_client_newtarget(hostname)
 
 				_, err = await client.connect()
 				if err is not None:

@@ -109,21 +109,31 @@ class LDAPConnectionFactory:
 		target = self.get_target()
 		return MSLDAPClient(target, cred)
 
-	def get_client_newtarget(self, hostname_or_ip:str) -> MSLDAPClient:
+	def get_client_newtarget(self, hostname_or_ip:str, ip:str = None, port:int = None, new_domain:str = None, old_target_ip:str = None) -> MSLDAPClient:
 		"""
 		Creates a client with a different target that can be used to interface with the server
 		"""
 		cred = self.get_credential()
 		target_old = self.get_target()
+		old_proxies = copy.deepcopy(target_old.proxies)
+		dc_ip = None
+		if cred.protocol.value == 'KERBEROS' and new_domain and new_domain.upper() != cred.domain.upper():
+			from asysocks.unicomm.common.target import UniTarget, UniProto
+			# If it's krb creds and the new host hasn't the same REALM as the previous connection we'll have to request a ticket for the new REALM from the previous kdcc if there is one, if not from the previous dc ip if possible
+			cred.cross_target = UniTarget(ip, 88, UniProto.CLIENT_TCP, proxies = old_proxies, dc_ip=ip)
+			cred.cross_realm = new_domain
+			dc_ip = old_target_ip
+
 		target = MSLDAPTarget(
-			hostname_or_ip, 
-			port=target_old.port, 
+			ip if ip else hostname_or_ip, 
+			port=port if port else target_old.port, 
 			protocol=target_old.protocol, 
 			tree=target_old.tree, 
-			proxies=copy.deepcopy(target_old.proxies), 
+			proxies=old_proxies, 
 			timeout=target_old.timeout, 
 			ldap_query_page_size=target_old.ldap_query_page_size, 
-			ldap_query_ratelimit=target_old.ldap_query_ratelimit, 
+			ldap_query_ratelimit=target_old.ldap_query_ratelimit,
+			dc_ip=dc_ip,
 			hostname=hostname_or_ip
 		)
 		return MSLDAPClient(target, cred)
