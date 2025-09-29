@@ -1287,7 +1287,7 @@ class MSLDAPClient:
 		return await self._con.modify(dn, changes, controls=controls_conv, encode=encode)
 
 
-	async def add(self, dn:str, attributes:Dict[str, object]):
+	async def add(self, dn:str, attributes:Dict[str, object], controls:Dict[str, object] = None):
 		"""
 		Performs the add operation.
 		
@@ -1295,11 +1295,17 @@ class MSLDAPClient:
 		:type dn: str
 		:param attributes: Attributes to be used in the operation
 		:type attributes: dict
+		:param controls: additional controls to be passed in the query
+		:type controls: dict
 		:return: A tuple of (True, None) on success or (False, Exception) on error. 
 		:rtype: (:class:`bool`, :class:`Exception`)
 		"""
-		
-		return await self._con.add(dn, attributes)
+		if controls is None:
+			controls = []
+		controls_conv = []
+		for control in controls:	
+			controls_conv.append(Control(control))
+		return await self._con.add(dn, attributes, controls=controls_conv)
 
 	async def delete(self, dn:str):
 		"""

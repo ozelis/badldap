@@ -562,7 +562,7 @@ class MSLDAPClientConnection:
 			print(e)
 			return False, e
 
-	async def add(self, entry:str, attributes:Dict[str, object]):
+	async def add(self, entry:str, attributes:Dict[str, object], controls:List[Control] = None):
 		"""
 		Performs the add operation.
 		
@@ -570,6 +570,8 @@ class MSLDAPClientConnection:
 		:type entry: str
 		:param attributes: Attributes to be used in the operation
 		:type attributes: dict
+		:param controls: additional controls to be passed in the query
+		:type controls: List[class:`Control`] 
 		:return: A tuple of (True, None) on success or (False, Exception) on error. 
 		:rtype: (:class:`bool`, :class:`Exception`)
 		"""
@@ -581,6 +583,8 @@ class MSLDAPClientConnection:
 			logger.debug(req)
 			br = { 'addRequest' : AddRequest(req)}
 			msg = { 'protocolOp' : protocolOp(br)}
+			if controls is not None:
+				msg['controls'] = controls
 			
 			msg_id = await self.send_message(msg)
 			results = await self.recv_message(msg_id)
