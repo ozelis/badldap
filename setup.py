@@ -52,8 +52,8 @@ setup(
 	],
 	install_requires=[
 		'unicrypto>=0.0.10',
-		'badauth>=0.1.2',
-		'asysocks>=0.2.11',
+		'badauth>=0.1.3',
+		'asysocks @ git+https://github.com/skelsec/asysocks.git@main',
 		'asn1crypto>=1.3.0',
 		'winacl>=0.1.8',
 		'prompt-toolkit>=3.0.2',

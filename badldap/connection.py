@@ -852,11 +852,10 @@ class MSLDAPClientConnection:
 								if control['controlType'] == b'1.2.840.113556.1.4.319':
 									try:
 										cookie = SearchControlValue.load(control['controlValue']).native['cookie']
-									except Exception as e:
-										raise e
+									except:
+										logger.debug("Cookie missing in the response!")
+										cookie = b''
 									break
-							else:
-								raise Exception('SearchControl missing from server response!')
 						else:
 							yield (convert_result(res['protocolOp'], raw), None)
 
