@@ -431,19 +431,11 @@ def encode_attributes(x):
 	"""converts a dict to attributelist"""
 	res = []
 	for k in x:
-		lookup_table = None
-		if k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC:
-			lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC
-		elif k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES:
-			lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES
-		elif k in LDAP_WELL_KNOWN_ATTRS:
-			lookup_table = LDAP_WELL_KNOWN_ATTRS
-		else:
-			raise Exception('Unknown conversion type for key "%s"' % k)
+		encoder = _find_attribute_encoder(k)
 		
 		res.append(Attribute({
 			'type' : k.encode(),
-			'attributes' : lookup_table[k](x[k], True)
+			'attributes' : encoder(x[k], True)
 		}))
 
 	return res
@@ -480,20 +472,12 @@ def encode_changes(x, encode=True):
 	logger.debug('Encode changes: %s' % x)
 	res = []
 	for k in x:
-		lookup_table = None		
+		encoder = None
 		for mod, value in x[k]:
 			attributes = []
 			if value:
-				if not lookup_table:
-					if k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC:
-						lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC
-					elif k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES:
-						lookup_table = MSLDAP_BUILTIN_ATTRIBUTE_TYPES
-					elif k in LDAP_WELL_KNOWN_ATTRS:
-						lookup_table = LDAP_WELL_KNOWN_ATTRS
-					else:
-						raise Exception('Unknown conversion type for key "%s"' % k)
-				encoder = lookup_table[k]
+				if not encoder:
+					encoder = _find_attribute_encoder(k)
 				# If value is a list but the attribute expect a single element, assign the element to value
 				splitted_name = encoder.__name__.split("_")
 				if isinstance(value, list) and "single" == splitted_name[0]:
@@ -2029,3 +2013,51 @@ LDAP_WELL_KNOWN_ATTRS = {
 	"msDS-DelegatedMSAState" : single_int,
 	"msDS-ManagedAccountPrecededByLink" : multi_str,
 }
+
+# Create case-insensitive lookup dictionaries (lowercase keys pointing to original case)
+_MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC_LOWER = {k.lower(): k for k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC}
+_MSLDAP_BUILTIN_ATTRIBUTE_TYPES_LOWER = {k.lower(): k for k in MSLDAP_BUILTIN_ATTRIBUTE_TYPES}
+_LDAP_WELL_KNOWN_ATTRS_LOWER = {k.lower(): k for k in LDAP_WELL_KNOWN_ATTRS}
+
+def _find_attribute_encoder(attr_name):
+	"""
+	Find the encoder function for an attribute name using case-insensitive lookup.
+	
+	This function performs case-insensitive attribute lookup by searching through
+	the attribute type dictionaries in priority order. The original case from the
+	user input is preserved in the encoded LDAP message.
+	
+	Priority order (same as the original code):
+	1. MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC (for attributes needing special encoding)
+	2. MSLDAP_BUILTIN_ATTRIBUTE_TYPES (for commonly used AD attributes)
+	3. LDAP_WELL_KNOWN_ATTRS (for standard LDAP attributes)
+	
+	Note: Some attributes exist in multiple dictionaries, sometimes with different
+	encoders. The first match (highest priority) is always returned, maintaining
+	the original behavior.
+	
+	:param attr_name: The attribute name to look up (case-insensitive)
+	:type attr_name: str
+	:return: The encoder function for the attribute
+	:rtype: function
+	:raises Exception: If the attribute is not found in any lookup table
+	"""
+	attr_lower = attr_name.lower()
+	
+	# Try MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC first (highest priority)
+	if attr_lower in _MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC_LOWER:
+		original_key = _MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC_LOWER[attr_lower]
+		return MSLDAP_BUILTIN_ATTRIBUTE_TYPES_ENC[original_key]
+	
+	# Try MSLDAP_BUILTIN_ATTRIBUTE_TYPES
+	if attr_lower in _MSLDAP_BUILTIN_ATTRIBUTE_TYPES_LOWER:
+		original_key = _MSLDAP_BUILTIN_ATTRIBUTE_TYPES_LOWER[attr_lower]
+		return MSLDAP_BUILTIN_ATTRIBUTE_TYPES[original_key]
+	
+	# Try LDAP_WELL_KNOWN_ATTRS (lowest priority)
+	if attr_lower in _LDAP_WELL_KNOWN_ATTRS_LOWER:
+		original_key = _LDAP_WELL_KNOWN_ATTRS_LOWER[attr_lower]
+		return LDAP_WELL_KNOWN_ATTRS[original_key]
+	
+	# Not found in any lookup table
+	raise Exception('Unknown conversion type for key "%s"' % attr_name)
