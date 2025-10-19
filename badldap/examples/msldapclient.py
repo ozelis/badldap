@@ -2155,7 +2155,7 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 	
 	async def do_shadowcred(self, targetuser:str):
 		try:
-			from msldap.commons.keycredential import KeyCredential
+			from badldap.commons.keycredential import KeyCredential
 
 			whoamires, err = await self.connection.whoamifull()
 			if err is not None:
