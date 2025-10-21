@@ -606,6 +606,55 @@ class MSLDAPClientConnection:
 		except Exception as e:
 			return False, e
 
+	async def modify_dn(self, entry:str, newrdn: str, deleteoldrdn: bool, newSuperior: str=None):
+		"""
+		Performs the modify_dn operation.
+
+		:param entry: The DN of the object that is to be renamed or moved
+		:type entry: str
+		:param newrdn: relative DN that will form the leftmost component of the new name of the entry (must be the same as original if newSuperios is specified)
+		:type newrdn: str
+		:param deleteoldrdn: controls whether the old RDN attribute values are to be retained as attributes of the entry, or deleted from the entry.
+		:type deleteoldrdn: bool
+		:param newSuperior: DN of container where object will be moved to, if this is specified newrdn must be the same as the left-most component of the original DN)
+		:type newSuperior: str
+
+		:return: A tuple of (True, None) on success or (False, Exception) on error.
+		:rtype: (:class:`bool`, :class:`Exception`)
+		"""
+		try:
+			req = {
+				'object' : entry.encode(),
+				'newrdn' : newrdn.encode(),
+				'deleteoldrdn' : deleteoldrdn
+			}
+			if newSuperior is not None:
+				req["newSuperior"] = newSuperior.encode()
+
+			br = { 'modDNRequest' : ModifyDNRequest(req) }
+			msg = { 'protocolOp' :  protocolOp(br) }
+
+			msg_id = await self.send_message(msg)
+			results = await self.recv_message(msg_id)
+
+			if isinstance(results[0], Exception):
+				return False, results[0]
+
+			for message in results:
+				msg_type = message['protocolOp'].name
+				message = message.native
+				if msg_type == 'modDNResponse':
+					if message['protocolOp']['resultCode'] != 'success':
+						return False, LDAPModifyException(
+							entry,
+							message['protocolOp']['resultCode'],
+							message['protocolOp']['diagnosticMessage']
+						)
+
+			return True, None
+		except Exception as e:
+			return False, e
+
 	async def modify(self, entry:str, changes:Dict[str, object], controls:List[Control] = None, encode=True,):
 		"""
 		Performs the modify operation.
