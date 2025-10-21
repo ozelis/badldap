@@ -330,7 +330,7 @@ class RelativeLDAPDN(LDAPString):
 
 class ModifyDNRequest(core.Sequence):
 	_fields = [
-		('entry', LDAPDN),
+		('object', LDAPDN),
 		('newrdn', RelativeLDAPDN),
 		('deleteoldrdn', core.Boolean),
 		('newSuperior', LDAPDN, {'optional': True, 'implicit': (CONTEXT, 0) }),
