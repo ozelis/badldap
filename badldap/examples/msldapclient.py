@@ -753,7 +753,7 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			return False
 
 	async def do_set_rdn(self, dn, newrdn):
-		"""Set new relative DN of an object"""
+		"""Set new relative DN of an object, eg: set_rdn 'CN=User1,OU=org1,DC=test' 'CN=User2'"""
 		try:
 			_, err = await self.connection._con.modify_dn(dn, newrdn, True, None)
 			if err is not None:
@@ -765,7 +765,7 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			return False
 
 	async def do_move_dn(self, dn, newSuperior):
-		""" Moves an object to a container """
+		""" Moves an object specified by DN to a different container, eg: move_dn 'CN=User1,OU=org1,DC=test' 'OU=org2,DC=test' """
 		newrdn = dn.split(',')[0]
 		try:
 			_, err = await self.connection._con.modify_dn(dn, newrdn, True, newSuperior)
