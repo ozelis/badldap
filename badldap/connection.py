@@ -9,7 +9,7 @@ from badldap.protocol.messages import LDAPMessage, BindRequest, \
 	protocolOp, AuthenticationChoice, SaslCredentials, \
 	SearchRequest, AttributeDescription, Filter, Filters, \
 	Controls, Control, SearchControlValue, AddRequest, \
-	ModifyRequest, DelRequest, ExtendedRequest, ExtendedResponse
+	ModifyRequest, DelRequest, ExtendedRequest, ExtendedResponse, ModifyDNRequest
 
 from badldap.protocol.utils import calcualte_length
 from badldap.protocol.typeconversion import convert_result, convert_attributes, encode_attributes, encode_changes
