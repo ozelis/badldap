@@ -752,6 +752,31 @@ class MSLDAPClientConsole(aiocmd.PromptToolkitCmd):
 			traceback.print_exc()
 			return False
 
+	async def do_set_rdn(self, dn, newrdn):
+		"""Set new relative DN of an object"""
+		try:
+			_, err = await self.connection._con.modify_dn(dn, newrdn, True, None)
+			if err is not None:
+				raise err
+			print("Set new relative DN OK!")
+			return True
+		except:
+			traceback.print_exc()
+			return False
+
+	async def do_move_dn(self, dn, newSuperior):
+		""" Moves an object to a container """
+		newrdn = dn.split(',')[0]
+		try:
+			_, err = await self.connection._con.modify_dn(dn, newrdn, True, newSuperior)
+			if err is not None:
+				raise err
+			print("Set new relative DN OK!")
+			return True
+		except:
+			traceback.print_exc()
+			return False
+
 	async def do_ls(self, fullpath = False):
 		"""Print objects in current work directory"""
 		for dn in self.__current_dirs:
