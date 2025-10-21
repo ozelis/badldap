@@ -333,8 +333,7 @@ class ModifyDNRequest(core.Sequence):
 		('entry', LDAPDN),
 		('newrdn', RelativeLDAPDN),
 		('deleteoldrdn', core.Boolean),
-		('deleteoldrdn', LDAPDN),
-		('newSuperior', LDAPDN, {'optional': True}),
+		('newSuperior', LDAPDN, {'optional': True, 'implicit': (CONTEXT, 0) }),
 		
 	]
 
